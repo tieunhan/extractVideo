@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -18,6 +18,7 @@ namespace MultiThreadExtractVideoFram
 {
     public partial class Form1 : Form
     {
+        Double TotalFrame;
         public Form1()
         {
             InitializeComponent();
@@ -46,53 +47,9 @@ namespace MultiThreadExtractVideoFram
 
         Queue<Bitmap> _queue = new Queue<Bitmap>();
         Object lockObj1 = new Object();
-        void ExtractVideo()
-        {
-            axWindowsMediaPlayer1.URL = txtVideoUrl.Text;
-            // Tạo một đối tượng VideoFileReader
-            VideoFileReader reader = new VideoFileReader();
-            // Mở file Video
-            reader.Open(txtVideoUrl.Text);
-            // Đọc khung hình
-            Double TotalFrame = reader.FrameCount;
-            for (int i = 0; i < TotalFrame; i++)
-            {
-                try
-                {
-                    Bitmap videoFrame = reader.ReadVideoFrame();
-                    Bitmap bmp = videoFrame;
-                    DrawText(bmp);
-                    _queue.Enqueue(bmp);
-                    pBImage.Image = bmp;
-                    progressBar1.Value = (int)(i / TotalFrame * 100);
-                    Thread.Sleep(30);
-                    //videoFrame.Dispose();
-                }
-                catch (Exception err)
-                {
-                    MessageBox.Show(err.Message);
-                }
-            }
-            reader.Close();
-        }
 
         Queue<Bitmap> _queue2 = new Queue<Bitmap>();
         Object lockObj2 = new Object();
-        void LoadQueue_DrawImage()
-        {
-            int qCount = _queue.Count;
-            while (_queue.Count != 0)
-            {
-                for(int i = 0; i < qCount; i++)
-                {
-                    Thread.Sleep(100);
-                    Bitmap bmp = _queue.Dequeue();
-                    //_queue2.Enqueue(bmp);
-                    pBImage.Image = (Image)_queue.Dequeue();
-                    progressBar2.Value = (int)(i / qCount * 100);
-                }
-            }
-        }
 
         #endregion
 
@@ -100,18 +57,27 @@ namespace MultiThreadExtractVideoFram
 
         private void btGhichu_Click(object sender, EventArgs e)
         {
-            int qCount = _queue.Count;
-            while (_queue.Count != 0)
+            new Thread(() =>
             {
-                for (int i = 0; i < qCount; i++)
+                int qCount = _queue.Count;
+                lock (lockObj2)
                 {
-                    Thread.Sleep(100);
-                    //Bitmap bmp = _queue.Dequeue();
-                    //_queue2.Enqueue(bmp);
-                    pBImage.Image = _queue.Dequeue();
-                    progressBar2.Value = (int)(i / qCount * 100);
+                    for (int i = 0; i < qCount; i++)
+                    {
+                        if (_queue.Count == 0)
+                            break;
+                        Thread.Sleep(100);
+                        Bitmap bmp = _queue.Dequeue();
+                        _queue2.Enqueue(bmp);
+                        this.Invoke(new Action(() =>
+                        {
+                            pBImage.Image = _queue2.Dequeue();
+                            progressBar2.Value = (int)(i / TotalFrame * 100);
+                        }));
+                    }
                 }
-            }
+            })
+            { IsBackground = true }.Start();
         }
 
         private void btSelectfile_Click(object sender, EventArgs e)
@@ -131,23 +97,25 @@ namespace MultiThreadExtractVideoFram
                     // Mở file Video
                     reader.Open(txtVideoUrl.Text);
                     // Đọc khung hình
-                    Double TotalFrame = reader.FrameCount;
-                    for (int i = 0; i < TotalFrame; i++)
+                    TotalFrame = reader.FrameCount;
+                    lock (lockObj1)
                     {
-                        try
+                        for (int i = 0; i < TotalFrame; i++)
                         {
-                            Bitmap videoFrame = reader.ReadVideoFrame();
-                            Bitmap bmp = videoFrame;
-                            DrawText(bmp);
-                            _queue.Enqueue(bmp);
-                            pBImage.Image = bmp;
-                            progressBar1.Value = (int)(i / TotalFrame * 100);
-                            Thread.Sleep(30);
-                            //videoFrame.Dispose();
-                        }
-                        catch (Exception err)
-                        {
-                            MessageBox.Show(err.Message);
+                            try
+                            {
+                                Bitmap videoFrame = reader.ReadVideoFrame();
+                                Bitmap bmp = videoFrame;
+                                DrawText(bmp);
+                                _queue.Enqueue(bmp);
+                                progressBar1.Value = (int)(i / TotalFrame * 100);
+                                Thread.Sleep(30);
+                                //videoFrame.Dispose();
+                            }
+                            catch (Exception err)
+                            {
+                                MessageBox.Show(err.Message);
+                            }
                         }
                     }
                     reader.Close();
