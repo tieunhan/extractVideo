@@ -1,4 +1,4 @@
-﻿namespace MultiThreadExtractVideoFram
+namespace MultiThreadExtractVideoFram
 {
     partial class Form1
     {
